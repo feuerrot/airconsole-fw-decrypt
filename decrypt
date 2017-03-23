@@ -12,8 +12,7 @@ iv = b'AirConso'
 def header_prettyprint():
 	print("File length: \nFrom header: {} byte \n Calculated: {} byte ".format(header_struct[3] + 64, len(data)))
 	print("Header CRC32:\nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[1], binascii.crc32(header_repl)))
-	# I'm currently not sure, how recovery_win.exe calculates the crc32 of the data. Something something header_byteswap()
-	# print("Data CRC32:  \nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[6], binascii.crc32(data_decrypted)))
+	print("Data CRC32:  \nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[6], binascii.crc32(data_decrypted)))
 	print("XTEA key: 0x{0[0]:08X} 0x{0[1]:08X} 0x{0[2]:08X} 0x{0[3]:08X}".format(xtea_key(header_struct)))
 
 # not sure if this is actually needed - the software implements this function tho
@@ -44,16 +43,20 @@ def xtea_key(s):
 	return key
 
 # yet another xtea implementation
-def xtea_decrypt(v, k):
+def xtea_decrypt(v, k, r):
 	y = v[0]
 	z = v[1]
-	sum = 0xC6EF3720
 	delta = 0x9E3779B9
-	for i in range(32):
-		z -= (((( y << 4 ) ^ ( y >> 5)) + y) ^ ( sum + k[(sum>>11) & 3])) & 0xFFFFFFFF
+	mask = 0xFFFFFFFF
+	sum = delta * r & mask
+	for i in range(r):
+		z -= (((( y << 4 ) ^ ( y >> 5)) + y) ^ ( sum + k[(sum>>11) & 3]))
+		z &= mask
 		sum -= delta
-		y -= (((( z << 4 ) ^ ( z >> 5)) + z) ^ ( sum + k[(sum & 3)])) & 0xFFFFFFFF
-	return (y & 0xFFFFFFFF, z & 0xFFFFFFFF)
+		sum &= mask
+		y -= (((( z << 4 ) ^ ( z >> 5)) + z) ^ ( sum + k[(sum & 3)]))
+		y &= mask
+	return (y & mask, z & mask)
 
 # does xtea in cbc mode
 def xtea_cbc_decrypt(iv, data, key):
@@ -62,7 +65,7 @@ def xtea_cbc_decrypt(iv, data, key):
 	while ptr < len(data):
 		buf8 = data[ptr:ptr+8]
 		# is there a better solution?
-		decrypt = xtea_decrypt(struct.unpack_from(">II", data, offset=ptr), key)
+		decrypt = xtea_decrypt(struct.unpack_from(">II", data, offset=ptr), key, 32)
 		decrypt = struct.pack(">II", decrypt[0], decrypt[1])
 		for i in range(8):
 			out[ptr + i] = decrypt[i] ^ iv[i]
@@ -76,11 +79,11 @@ if len(sys.argv) == 1:
 
 data = bytearray(open(sys.argv[1], "rb").read())
 
-header = data[0:64]
+header = data[:64]
 header_struct = struct.unpack_from(">4sIII4s4sI4s32s", header)
 header_repl = header_replace(header)
 
-# do we really need this? => maybe for crc32(data_decrypted)
+# do we really need this? => maybe for crc32(data_decrypted) => no
 #header_swap = header_byteswap(header)
 #header_swap_struct = struct.unpack_from(">4sIII4s4sI4s32s", header_swap)
 
