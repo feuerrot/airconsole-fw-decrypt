@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+# Input: Airconsole TFTP recovery image
+# Output: decrypted TFTP recovery image
+# Thanks to jn for doing all of the IDA magic!
+import struct
+import binascii
+import sys
+
+# well
+iv = b'AirConso'
+
+def header_prettyprint():
+	print("File length: \nFrom header: {} byte \n Calculated: {} byte ".format(header_struct[3] + 64, len(data)))
+	print("Header CRC32:\nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[1], binascii.crc32(header_repl)))
+	# I'm currently not sure, how recovery_win.exe calculates the crc32 of the data. Something something header_byteswap()
+	# print("Data CRC32:  \nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[6], binascii.crc32(data_decrypted)))
+	print("XTEA key: 0x{0[0]:08X} 0x{0[1]:08X} 0x{0[2]:08X} 0x{0[3]:08X}".format(xtea_key(header_struct)))
+
+# not sure if this is actually needed - the software implements this function tho
+def header_byteswap(header):
+	s = struct.unpack("<IIIIIII36s", header)
+	out = struct.pack(">IIIIIII36s", s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7])
+	return out
+
+# does some replacement for the crc32(header) calculation
+def header_replace(header):
+	header[0] = 0x27
+	header[1] = 0x05
+	header[2] = 0x19
+	header[3] = 0x56
+	header[4] = 0
+	header[5] = 0
+	header[6] = 0
+	header[7] = 0
+	return header
+
+# gets the components of the encryption key out of the header struct
+def xtea_key(s):
+	header_crc = s[1]
+	xtea_foo = s[2]
+	body_size = s[3]
+	body_crc = s[6]
+	key = (header_crc, xtea_foo, body_size, body_crc)
+	return key
+
+# yet another xtea implementation
+def xtea_decrypt(v, k):
+	y = v[0]
+	z = v[1]
+	sum = 0xC6EF3720
+	delta = 0x9E3779B9
+	for i in range(32):
+		z -= (((( y << 4 ) ^ ( y >> 5)) + y) ^ ( sum + k[(sum>>11) & 3])) & 0xFFFFFFFF
+		sum -= delta
+		y -= (((( z << 4 ) ^ ( z >> 5)) + z) ^ ( sum + k[(sum & 3)])) & 0xFFFFFFFF
+	return (y & 0xFFFFFFFF, z & 0xFFFFFFFF)
+
+# does xtea in cbc mode
+def xtea_cbc_decrypt(iv, data, key):
+	out = bytearray(len(data))
+	ptr = 0
+	while ptr < len(data):
+		buf8 = data[ptr:ptr+8]
+		# is there a better solution?
+		decrypt = xtea_decrypt(struct.unpack_from(">II", data, offset=ptr), key)
+		decrypt = struct.pack(">II", decrypt[0], decrypt[1])
+		for i in range(8):
+			out[ptr + i] = decrypt[i] ^ iv[i]
+		ptr += 8
+		iv = buf8
+	return out
+
+if len(sys.argv) == 1:
+	print("Usage: {} [encrypted image]".format(sys.argv[0]))
+	exit(0)
+
+data = bytearray(open(sys.argv[1], "rb").read())
+
+header = data[0:64]
+header_struct = struct.unpack_from(">4sIII4s4sI4s32s", header)
+header_repl = header_replace(header)
+
+# do we really need this? => maybe for crc32(data_decrypted)
+#header_swap = header_byteswap(header)
+#header_swap_struct = struct.unpack_from(">4sIII4s4sI4s32s", header_swap)
+
+data_decrypted = xtea_cbc_decrypt(iv, data[64:], xtea_key(header_struct))
+
+header_prettyprint()
+
+output = open("{}.decrypted".format(sys.argv[1]), "wb")
+output.write(data_decrypted)
