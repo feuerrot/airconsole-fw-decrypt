@@ -28,6 +28,7 @@ From header: 0x7ac49366
 Data CRC32:
 From header: 0x49132a26
  Calculated: 0x49132a26
+Timestamp: 2016-10-07 01:58:14
 XTEA key: 0x7AC49366 0x57F6E516 0x00353FC0 0x49132A26
 ```
 
