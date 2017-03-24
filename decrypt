@@ -43,6 +43,21 @@ def xtea_key(s):
 	return key
 
 # yet another xtea implementation
+def xtea_encrypt(v, k, r):
+	y = v[0]
+	z = v[1]
+	delta = 0x9E3779B9
+	mask = 0xFFFFFFFF
+	sum = 0
+	for i in range(r):
+		y += ((((z << 4) ^ (z >> 5)) + z) ^ (sum + k[sum & 3]))
+		y &= mask
+		sum += delta
+		sum &= mask
+		z += ((((y << 4) ^ (y >> 5)) + y) ^ (sum + k[(sum >> 11) & 3]))
+		z &= mask
+	return (y & mask, z & mask)
+
 def xtea_decrypt(v, k, r):
 	y = v[0]
 	z = v[1]
@@ -50,15 +65,27 @@ def xtea_decrypt(v, k, r):
 	mask = 0xFFFFFFFF
 	sum = delta * r & mask
 	for i in range(r):
-		z -= (((( y << 4 ) ^ ( y >> 5)) + y) ^ ( sum + k[(sum>>11) & 3]))
+		z -= ((((y << 4) ^ (y >> 5)) + y) ^ (sum + k[(sum>>11) & 3]))
 		z &= mask
 		sum -= delta
 		sum &= mask
-		y -= (((( z << 4 ) ^ ( z >> 5)) + z) ^ ( sum + k[(sum & 3)]))
+		y -= ((((z << 4) ^ (z >> 5)) + z) ^ (sum + k[sum & 3]))
 		y &= mask
 	return (y & mask, z & mask)
 
 # does xtea in cbc mode
+def xtea_cbc_encrypt(iv, data, key):
+	data = bytearray(data)
+	ptr = 0
+	while ptr < len(data):
+		for i in range(8):
+			data[ptr + i] ^= iv[i]
+		encrypt = xtea_encrypt(struct.unpack_from(">II", data, offset=ptr), key, 32)
+		struct.pack_into(">II", data, ptr, encrypt[0], encrypt[1])
+		iv = data[ptr:ptr+8]
+		ptr += 8
+	return data
+
 def xtea_cbc_decrypt(iv, data, key):
 	out = bytearray(len(data))
 	ptr = 0
