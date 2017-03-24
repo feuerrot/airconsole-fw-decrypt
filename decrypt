@@ -5,6 +5,7 @@
 import struct
 import binascii
 import sys
+import datetime
 
 # well
 iv = b'AirConso'
@@ -13,7 +14,17 @@ def header_prettyprint():
 	print("File length: \nFrom header: {} byte \n Calculated: {} byte ".format(header_struct[3] + 64, len(data)))
 	print("Header CRC32:\nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[1], binascii.crc32(header_repl)))
 	print("Data CRC32:  \nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[6], binascii.crc32(data_decrypted)))
+	print("Timestamp: {}".format(datetime.datetime.fromtimestamp(header_struct[2])))
 	print("XTEA key: 0x{0[0]:08X} 0x{0[1]:08X} 0x{0[2]:08X} 0x{0[3]:08X}".format(xtea_key(header_struct)))
+
+def header_debugprint():
+	print("Header:")
+	print("Magic:\t\t{0[0]}\nData length:\t{0[3]} Byte\nHeader CRC32:\t0x{0[1]:08x}\nData CRC32:\t0x{0[6]:08x}\nFirmware name:\t{0[8]}\nTimestamp:\t{0[2]}".format(header_struct))
+	# header_struct[4] is always 0x80000000
+	# header_struct[7] is always 0x05050203
+	# header_struct[5] is some sort of firmware version? It doesn't get incremented between 2.55 and 2.60 though…
+	print("dunno:\t\t{0[4]}\ndunno:\t\t{0[5]}\ndunno:\t\t{0[7]}".format(header_struct))
+	exit(0)
 
 # not sure if this is actually needed - the software implements this function tho
 def header_byteswap(header):
@@ -109,6 +120,7 @@ data = bytearray(open(sys.argv[1], "rb").read())
 header = data[:64]
 header_struct = struct.unpack_from(">4sIII4s4sI4s32s", header)
 header_repl = header_replace(header)
+#header_debugprint()
 
 # do we really need this? => maybe for crc32(data_decrypted) => no
 #header_swap = header_byteswap(header)
