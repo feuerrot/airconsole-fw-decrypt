@@ -140,20 +140,3 @@ if __name__ == '__main__':
 	fwimg.data_save("{}.decrypted".format(sys.argv[1]))
 	fwimg.data_load("{}.decrypted".format(sys.argv[1]))
 	fwimg.image_save("{}.encrypted".format(sys.argv[1]))
-
-#header = header_decode(data[:64])
-##header_struct = struct.unpack_from(">4sIII4s4sI4s32s", header)
-##header_repl = header_replace(header)
-##header_debugprint()
-#write_header(header, "{}.header".format(sys.argv[1]))
-
-## do we really need this? => maybe for crc32(data_decrypted) => no
-##header_swap = header_byteswap(header)
-##header_swap_struct = struct.unpack_from(">4sIII4s4sI4s32s", header_swap)
-
-#data_decrypted = xtea_cbc_decrypt(iv, data[64:], xtea_key(header_struct))
-
-#header_prettyprint()
-
-#output = open("{}.decrypted".format(sys.argv[1]), "wb")
-#output.write(data_decrypted)
