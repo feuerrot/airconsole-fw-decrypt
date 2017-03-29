@@ -1,3 +1,4 @@
 *.bin
 *.decrypted
 *.sw[po]
+__pycache__
