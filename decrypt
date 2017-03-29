@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# Input: Airconsole TFTP recovery image
-# Output: decrypted TFTP recovery image
+# does things with an Airconsole TFTP recovery image
 # Thanks to jn for doing all of the IDA magic!
 import struct
 import binascii
@@ -14,7 +13,6 @@ class AirConsoleFirmwareImage():
 
 	def __init__(self):
 		self.xtea = None
-		pass
 	
 	def data_decrypt(self):
 		if self.xtea == None:
@@ -41,7 +39,9 @@ class AirConsoleFirmwareImage():
 
 	def data_load(self, filename):
 		"""loads the unencrypted content of an image file"""
-		pass
+		fd = open(filename, "rb")
+		self.data = fd.read()
+		fd.close()
 	
 	def data_save(self, filename):
 		"""saves the unencrypted content of an image file"""
@@ -138,6 +138,7 @@ if __name__ == '__main__':
 	fwimg.image_load(sys.argv[1])
 	fwimg.header_prettyprint()
 	fwimg.data_save("{}.decrypted".format(sys.argv[1]))
+	fwimg.data_load("{}.decrypted".format(sys.argv[1]))
 	fwimg.image_save("{}.encrypted".format(sys.argv[1]))
 
 #header = header_decode(data[:64])
