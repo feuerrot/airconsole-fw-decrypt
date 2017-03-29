@@ -24,7 +24,7 @@ class AirConsoleFirmwareImage():
 	def image_load(self, filename):
 		"""loads an image file"""
 		self.data = bytearray(open(filename, "rb").read())
-		self.header_decode()
+		self.header_unpack()
 		self.data_decrypt()
 
 	def data_encrypt(self):
@@ -56,19 +56,21 @@ class AirConsoleFirmwareImage():
 		print(json.dumps(struct))
 
 	def calculate_crc32_header(self):
-		return 0
+		h = self.header_pack()
+		h = self.header_replace(h)
+		return binascii.crc32(h)
 	
 	def calculate_crc32_data(self):
-		return 0
+		return binascii.crc32(self.data)
 
 	def header_prettyprint(self):
-		print("File length: \nFrom header: {} byte \n Calculated: {} byte ".format(self.header['file_length'] + 64, len(self.data)))
+		print("File length: \nFrom header: {} byte \n Calculated: {} byte ".format(self.header['file_length'], len(self.data)))
 		print("Header CRC32:\nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(self.header['header_crc32'], self.calculate_crc32_header()))
 		print("Data CRC32:  \nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(self.header['data_crc32'], self.calculate_crc32_data()))
 		print("Timestamp: {}".format(datetime.datetime.fromtimestamp(self.header['timestamp'])))
 		print("XTEA key: 0x{0[0]:08X} 0x{0[1]:08X} 0x{0[2]:08X} 0x{0[3]:08X}".format(self.xtea_key()))
 
-	def header_decode(self):
+	def header_unpack(self):
 		s = struct.unpack(">4sIII4s4sI4s32s", self.data[:64])
 		d = {
 			'magic':	s[0],
@@ -83,6 +85,20 @@ class AirConsoleFirmwareImage():
 		}
 		self.header = d
 
+	def header_pack(self):
+		h = struct.pack(">4sIII4s4sI4s32s",
+			self.header['magic'],
+			self.header['header_crc32'],
+			self.header['timestamp'],
+			self.header['file_length'],
+			self.header['unknown_0'],
+			self.header['unknown_1'],
+			self.header['data_crc32'],
+			self.header['unknown_2'],
+			self.header['fw_name']
+		)
+		return h
+
 	# not sure if this is actually needed - the software implements this function tho
 	def header_byteswap(self):
 		s = struct.unpack("<IIIIIII36s", self.header)
@@ -91,6 +107,7 @@ class AirConsoleFirmwareImage():
 
 	# does some replacement for the crc32(header) calculation
 	def header_replace(self, header):
+		header = bytearray(header)
 		header[0] = 0x27
 		header[1] = 0x05
 		header[2] = 0x19
@@ -114,7 +131,6 @@ if __name__ == '__main__':
 		exit(0)
 	fwimg = AirConsoleFirmwareImage()
 	fwimg.image_load(sys.argv[1])
-	fwimg.header_decode()
 	fwimg.header_prettyprint()
 	fwimg.data_save("{}.decrypted".format(sys.argv[1]))
 
