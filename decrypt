@@ -6,129 +6,131 @@ import struct
 import binascii
 import sys
 import datetime
+import json
+import xtea
 
-# well
-iv = b'AirConso'
+class AirConsoleFirmwareImage():
+	iv = b'AirConso' # well…
 
-def header_prettyprint():
-	print("File length: \nFrom header: {} byte \n Calculated: {} byte ".format(header_struct[3] + 64, len(data)))
-	print("Header CRC32:\nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[1], binascii.crc32(header_repl)))
-	print("Data CRC32:  \nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(header_struct[6], binascii.crc32(data_decrypted)))
-	print("Timestamp: {}".format(datetime.datetime.fromtimestamp(header_struct[2])))
-	print("XTEA key: 0x{0[0]:08X} 0x{0[1]:08X} 0x{0[2]:08X} 0x{0[3]:08X}".format(xtea_key(header_struct)))
+	def __init__(self):
+		self.xtea = None
+		pass
+	
+	def data_decrypt(self):
+		if self.xtea == None:
+			self.xtea_key()
+		self.data = self.xtea.xtea_cbc_decrypt(self.data[64:])
+	
+	def image_load(self, filename):
+		"""loads an image file"""
+		self.data = bytearray(open(filename, "rb").read())
+		self.header_decode()
+		self.data_decrypt()
 
-def header_debugprint():
-	print("Header:")
-	print("Magic:\t\t{0[0]}\nData length:\t{0[3]} Byte\nHeader CRC32:\t0x{0[1]:08x}\nData CRC32:\t0x{0[6]:08x}\nFirmware name:\t{0[8]}\nTimestamp:\t{0[2]}".format(header_struct))
-	# header_struct[4] is always 0x80000000
-	# header_struct[7] is always 0x05050203
-	# header_struct[5] is some sort of firmware version? It doesn't get incremented between 2.55 and 2.60 though…
-	print("dunno:\t\t{0[4]}\ndunno:\t\t{0[5]}\ndunno:\t\t{0[7]}".format(header_struct))
-	exit(0)
+	def data_encrypt(self):
+		pass
 
-# not sure if this is actually needed - the software implements this function tho
-def header_byteswap(header):
-	s = struct.unpack("<IIIIIII36s", header)
-	out = struct.pack(">IIIIIII36s", s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7])
-	return out
+	def image_save(self, filename):
+		"""saves an image file"""
+		pass
 
-# does some replacement for the crc32(header) calculation
-def header_replace(header):
-	header[0] = 0x27
-	header[1] = 0x05
-	header[2] = 0x19
-	header[3] = 0x56
-	header[4] = 0
-	header[5] = 0
-	header[6] = 0
-	header[7] = 0
-	return header
+	def data_load(self, filename):
+		"""loads the unencrypted content of an image file"""
+		pass
+	
+	def data_save(self, filename):
+		"""saves the unencrypted content of an image file"""
+		fd = open(filename, "wb")
+		fd.write(self.data)
+		fd.close()
 
-# gets the components of the encryption key out of the header struct
-def xtea_key(s):
-	header_crc = s[1]
-	xtea_foo = s[2]
-	body_size = s[3]
-	body_crc = s[6]
-	key = (header_crc, xtea_foo, body_size, body_crc)
-	return key
+	def header_load(self, filename):
+		"""loads an unencrypted copy of the image file header"""
+		pass
+	
+	def header_save(self, filename):
+		"""saves an unencrypted copy of the image file header"""
+		fd = open(filename, 'wb')
+		for elem in self.header:
+			print(elem)
+		print(json.dumps(struct))
 
-# yet another xtea implementation
-def xtea_encrypt(v, k, r):
-	y = v[0]
-	z = v[1]
-	delta = 0x9E3779B9
-	mask = 0xFFFFFFFF
-	sum = 0
-	for i in range(r):
-		y += ((((z << 4) ^ (z >> 5)) + z) ^ (sum + k[sum & 3]))
-		y &= mask
-		sum += delta
-		sum &= mask
-		z += ((((y << 4) ^ (y >> 5)) + y) ^ (sum + k[(sum >> 11) & 3]))
-		z &= mask
-	return (y & mask, z & mask)
+	def calculate_crc32_header(self):
+		return 0
+	
+	def calculate_crc32_data(self):
+		return 0
 
-def xtea_decrypt(v, k, r):
-	y = v[0]
-	z = v[1]
-	delta = 0x9E3779B9
-	mask = 0xFFFFFFFF
-	sum = delta * r & mask
-	for i in range(r):
-		z -= ((((y << 4) ^ (y >> 5)) + y) ^ (sum + k[(sum>>11) & 3]))
-		z &= mask
-		sum -= delta
-		sum &= mask
-		y -= ((((z << 4) ^ (z >> 5)) + z) ^ (sum + k[sum & 3]))
-		y &= mask
-	return (y & mask, z & mask)
+	def header_prettyprint(self):
+		print("File length: \nFrom header: {} byte \n Calculated: {} byte ".format(self.header['file_length'] + 64, len(self.data)))
+		print("Header CRC32:\nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(self.header['header_crc32'], self.calculate_crc32_header()))
+		print("Data CRC32:  \nFrom header: 0x{:08x}\n Calculated: 0x{:08x}".format(self.header['data_crc32'], self.calculate_crc32_data()))
+		print("Timestamp: {}".format(datetime.datetime.fromtimestamp(self.header['timestamp'])))
+		print("XTEA key: 0x{0[0]:08X} 0x{0[1]:08X} 0x{0[2]:08X} 0x{0[3]:08X}".format(self.xtea_key()))
 
-# does xtea in cbc mode
-def xtea_cbc_encrypt(iv, data, key):
-	data = bytearray(data)
-	ptr = 0
-	while ptr < len(data):
-		for i in range(8):
-			data[ptr + i] ^= iv[i]
-		encrypt = xtea_encrypt(struct.unpack_from(">II", data, offset=ptr), key, 32)
-		struct.pack_into(">II", data, ptr, encrypt[0], encrypt[1])
-		iv = data[ptr:ptr+8]
-		ptr += 8
-	return data
+	def header_decode(self):
+		s = struct.unpack(">4sIII4s4sI4s32s", self.data[:64])
+		d = {
+			'magic':	s[0],
+			'fw_name':	s[8],
+			'file_length':	s[3],
+			'header_crc32':	s[1],
+			'data_crc32':	s[6],
+			'timestamp':	s[2],
+			'unknown_0':	s[4],
+			'unknown_1':	s[5],
+			'unknown_2':	s[7]
+		}
+		self.header = d
 
-def xtea_cbc_decrypt(iv, data, key):
-	out = bytearray(len(data))
-	ptr = 0
-	while ptr < len(data):
-		buf8 = data[ptr:ptr+8]
-		# is there a better solution?
-		decrypt = xtea_decrypt(struct.unpack_from(">II", data, offset=ptr), key, 32)
-		decrypt = struct.pack(">II", decrypt[0], decrypt[1])
-		for i in range(8):
-			out[ptr + i] = decrypt[i] ^ iv[i]
-		ptr += 8
-		iv = buf8
-	return out
+	# not sure if this is actually needed - the software implements this function tho
+	def header_byteswap(self):
+		s = struct.unpack("<IIIIIII36s", self.header)
+		out = struct.pack(">IIIIIII36s", s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7])
+		return out
 
-if len(sys.argv) == 1:
-	print("Usage: {} [encrypted image]".format(sys.argv[0]))
-	exit(0)
+	# does some replacement for the crc32(header) calculation
+	def header_replace(self, header):
+		header[0] = 0x27
+		header[1] = 0x05
+		header[2] = 0x19
+		header[3] = 0x56
+		header[4] = 0
+		header[5] = 0
+		header[6] = 0
+		header[7] = 0
+		return header
 
-data = bytearray(open(sys.argv[1], "rb").read())
+	# gets the components of the encryption key out of the header struct
+	def xtea_key(self):
+		key = (self.header['header_crc32'], self.header['timestamp'], self.header['file_length'], self.header['data_crc32'])
+		if self.xtea == None:
+			self.xtea = xtea.XTEA(key, self.iv)
+		return key
 
-header = data[:64]
-header_struct = struct.unpack_from(">4sIII4s4sI4s32s", header)
-header_repl = header_replace(header)
-#header_debugprint()
+if __name__ == '__main__':
+	if len(sys.argv) == 1:
+		print("Usage: {} [encrypted image]".format(sys.argv[0]))
+		exit(0)
+	fwimg = AirConsoleFirmwareImage()
+	fwimg.image_load(sys.argv[1])
+	fwimg.header_decode()
+	fwimg.header_prettyprint()
+	fwimg.data_save("{}.decrypted".format(sys.argv[1]))
 
-# do we really need this? => maybe for crc32(data_decrypted) => no
-#header_swap = header_byteswap(header)
-#header_swap_struct = struct.unpack_from(">4sIII4s4sI4s32s", header_swap)
+#header = header_decode(data[:64])
+##header_struct = struct.unpack_from(">4sIII4s4sI4s32s", header)
+##header_repl = header_replace(header)
+##header_debugprint()
+#write_header(header, "{}.header".format(sys.argv[1]))
 
-data_decrypted = xtea_cbc_decrypt(iv, data[64:], xtea_key(header_struct))
+## do we really need this? => maybe for crc32(data_decrypted) => no
+##header_swap = header_byteswap(header)
+##header_swap_struct = struct.unpack_from(">4sIII4s4sI4s32s", header_swap)
 
-header_prettyprint()
+#data_decrypted = xtea_cbc_decrypt(iv, data[64:], xtea_key(header_struct))
 
-output = open("{}.decrypted".format(sys.argv[1]), "wb")
-output.write(data_decrypted)
+#header_prettyprint()
+
+#output = open("{}.decrypted".format(sys.argv[1]), "wb")
+#output.write(data_decrypted)
