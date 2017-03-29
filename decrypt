@@ -19,20 +19,25 @@ class AirConsoleFirmwareImage():
 	def data_decrypt(self):
 		if self.xtea == None:
 			self.xtea_key()
-		self.data = self.xtea.xtea_cbc_decrypt(self.data[64:])
+		self.data = self.xtea.xtea_cbc_decrypt(self.image_data[64:])
 	
 	def image_load(self, filename):
 		"""loads an image file"""
-		self.data = bytearray(open(filename, "rb").read())
+		self.image_data = bytearray(open(filename, "rb").read())
 		self.header_unpack()
 		self.data_decrypt()
 
 	def data_encrypt(self):
-		pass
+		if self.xtea == None:
+			self.xtea_key()
+		return self.xtea.xtea_cbc_encrypt(self.data)
 
 	def image_save(self, filename):
 		"""saves an image file"""
-		pass
+		fd = open(filename, "wb")
+		fd.write(self.header_pack())
+		fd.write(self.data_encrypt())
+		fd.close()
 
 	def data_load(self, filename):
 		"""loads the unencrypted content of an image file"""
@@ -71,7 +76,7 @@ class AirConsoleFirmwareImage():
 		print("XTEA key: 0x{0[0]:08X} 0x{0[1]:08X} 0x{0[2]:08X} 0x{0[3]:08X}".format(self.xtea_key()))
 
 	def header_unpack(self):
-		s = struct.unpack(">4sIII4s4sI4s32s", self.data[:64])
+		s = struct.unpack(">4sIII4s4sI4s32s", self.image_data[:64])
 		d = {
 			'magic':	s[0],
 			'fw_name':	s[8],
@@ -133,6 +138,7 @@ if __name__ == '__main__':
 	fwimg.image_load(sys.argv[1])
 	fwimg.header_prettyprint()
 	fwimg.data_save("{}.decrypted".format(sys.argv[1]))
+	fwimg.image_save("{}.encrypted".format(sys.argv[1]))
 
 #header = header_decode(data[:64])
 ##header_struct = struct.unpack_from(">4sIII4s4sI4s32s", header)
