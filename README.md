@@ -5,8 +5,9 @@ openwrt which can be used as a serial to ethernet gateway.
 They distribute firmware updates but unfortunately they are encrypted.
 
 ## Usage
-`./decrypt [fwimage.bin]` decrypts the firmware image into a file named
-fwimage.bin.decrypted. Currently that's the only thing this tool can do.
+`./fw_tool [fwimage.bin]` decrypts the firmware image into a file named
+fwimage.bin.decrypted and encrypts the firmware into a new file named
+fwimage.bin.encrypted.
 
 ### Example
 Let's assume, that you've got a file named `airconsole-2.80-web.bin` with
@@ -18,7 +19,7 @@ SHA512: e72a3085d6db86c88a5d2b1668c3c9566910f3f22542e05e995d8a24f93003a3d244a94a
 
 This is how the decryption of the file would look like:
 ```
-feuerrot@lynx % ./decrypt airconsole-2.80-web.bin
+feuerrot@lynx % ./fw_tool airconsole-2.80-web.bin
 File length:
 From header: 3489792 byte
  Calculated: 3489792 byte
